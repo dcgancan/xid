@@ -1227,13 +1227,24 @@ async function createCardImage() {
    * borrowing a scale fitted to that would shrink the PNG for no reason. Same
    * policy, measured against this geometry.
    *
-   * Baselines: the first sits at 266 and the facts rule at 420. With the band
-   * (drawn across 352-394) the bio has two lines; with the band dropped it has
-   * four, which at 31px over 790px is more than the 160 characters X allows.
+   * Baselines: the first sits at 266 and the facts rule at FACTS_TOP. With the
+   * band the bio has three lines; with the band dropped it has four, which at
+   * 31px over 790px is more than the 160 characters X allows.
    */
   const BIO_SIZE = 31;
   const BIO_LEADING = 43 / BIO_SIZE;
   const BIO_TOP = 266;
+  /**
+   * The facts block is bottom-anchored -- on screen the guilloché band above it
+   * absorbs the slack -- so tightening its rhythm moves its top rule DOWN and
+   * hands the difference to the bio. This mirrors the 0.5cqw of cell padding and
+   * 0.8cqw of row gap taken out of `.card__facts`: 9.36px at a 520px card, 25px
+   * at this one's 2.69x scale. Row spacings keep their shipped proportions; only
+   * the two amounts that were removed on screen come out here.
+   */
+  const FACTS_TOP = 445;
+  const BAND_TOP = 377;
+  const BAND_BOTTOM = 419;
   const bioText = currentProfile.bio?.trim() || "A public identity, minted from X.";
 
   const bioMin = BIO_SIZE * BIO_MIN_SCALE;
@@ -1245,10 +1256,11 @@ async function createCardImage() {
   for (let size = BIO_SIZE; ; size = Math.max(bioMin, size - 1)) {
     ctx.font = `600 ${size}px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif`;
     const leading = size * BIO_LEADING;
-    // Room for a line is room for its baseline: 340 clears the band's top edge,
-    // 394 is the band's own bottom, which the bio may occupy once it is gone.
-    const withBand = 1 + Math.floor((340 - BIO_TOP) / leading);
-    const withoutBand = 1 + Math.floor((394 - BIO_TOP) / leading);
+    // Room for a line is room for its baseline: BAND_TOP - 12 clears the band's
+    // top edge, BAND_BOTTOM is the band's own floor, which the bio may occupy
+    // once the band is gone.
+    const withBand = 1 + Math.floor((BAND_TOP - 12 - BIO_TOP) / leading);
+    const withoutBand = 1 + Math.floor((BAND_BOTTOM - BIO_TOP) / leading);
     const needed = wrapCanvasLines(ctx, bioText, detailsWidth, 999).length;
     if (needed <= withoutBand) {
       bioSize = size;
@@ -1282,8 +1294,8 @@ async function createCardImage() {
     ctx.lineWidth = 1;
     for (let x = detailsX - 60; x < width - 28; x += 16) {
       ctx.beginPath();
-      ctx.moveTo(x, 394);
-      ctx.lineTo(x + 12, 352);
+      ctx.moveTo(x, BAND_BOTTOM);
+      ctx.lineTo(x + 12, BAND_TOP);
       ctx.stroke();
     }
   }
@@ -1292,31 +1304,38 @@ async function createCardImage() {
   ctx.strokeStyle = divider;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(detailsX, 420);
-  ctx.lineTo(width - 88, 420);
+  ctx.moveTo(detailsX, FACTS_TOP);
+  ctx.lineTo(width - 88, FACTS_TOP);
   ctx.stroke();
 
-  // The facts, now the same 2x2 grid as the screen: SINCE / FOLLOWERS over
+  // The facts, the same 2x2 grid as the screen: SINCE / FOLLOWERS over
   // LOCATION / POSTS, split at detailsX + 400. The values come straight from
   // the DOM, so the export cannot drift from the card.
+  //
+  // Rows run FACTS_TOP +43 label, +85 value, +110 rule, +129 label, +171 value.
+  // Those are the shipped offsets less the two amounts the screen gave back --
+  // 7px of cell padding per row and 11px of row gap -- so the block keeps its
+  // proportions and only loses the whitespace. The last value stays on 616,
+  // which is what makes the saving land above the block rather than below it,
+  // where the microprint and the footer rule are.
   ctx.fillStyle = palette.dim;
   ctx.font = "750 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  ctx.fillText("SINCE", detailsX, 470);
+  ctx.fillText("SINCE", detailsX, 488);
   ctx.fillStyle = palette.text;
   ctx.font = "700 35px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  ctx.fillText(sinceEl.textContent || "—", detailsX, 512);
+  ctx.fillText(sinceEl.textContent || "—", detailsX, 530);
 
   ctx.fillStyle = palette.dim;
   ctx.font = "750 18px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  ctx.fillText("FOLLOWERS", detailsX + 400, 470);
+  ctx.fillText("FOLLOWERS", detailsX + 400, 488);
   ctx.fillStyle = palette.text;
   ctx.font = "700 35px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  ctx.fillText(followersEl.textContent || "—", detailsX + 400, 512);
+  ctx.fillText(followersEl.textContent || "—", detailsX + 400, 530);
 
   ctx.strokeStyle = divider;
   ctx.beginPath();
-  ctx.moveTo(detailsX, 548);
-  ctx.lineTo(width - 88, 548);
+  ctx.moveTo(detailsX, 555);
+  ctx.lineTo(width - 88, 555);
   ctx.stroke();
 
   ctx.fillStyle = palette.dim;

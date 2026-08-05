@@ -561,13 +561,24 @@ body {
      reserved track (21cqw) did the same job but left too little room for a
      second data column. */
   max-width: 41.5cqw;
-  gap: 2.8cqw 3.4cqw;
+  /* The row gap and the cells' padding below are the bio's last reserve, spent
+     once and for all rather than per profile. The facts block is CONTENT, not
+     filler like `.card__security` above it -- two cards side by side must show
+     the same data rhythm whatever their bios do -- so this is a fixed change to
+     the design, not another `--band`.
+
+     It buys 6px of the body row on a phone and 9px at 520px, entirely out of
+     whitespace: no value moves column, no type changes size. Measured on a
+     156-character bio, which is as long as X allows: at 390px the card goes
+     from 143 of 156 characters to all of them, at 360px from 88 to 128, and at
+     520px the extra room lets the fit hold a larger face. */
+  gap: 2cqw 3.4cqw;
   margin: 0;
 }
 
 .card__fact {
   min-width: 0;
-  padding-top: 2.1cqw;
+  padding-top: 1.6cqw;
   border-top: 1px solid color-mix(in oklab, var(--mark-ink) 21%, transparent);
   /* Auto-placement fills the 2x2 grid in reading order. */
 }
