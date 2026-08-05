@@ -512,28 +512,34 @@ body {
   margin: 0;
   overflow: hidden;
   color: color-mix(in oklab, var(--mark-ink) 88%, transparent);
-  font-size: clamp(9px, 2.55cqw, 13px);
+  /* Both are fitted per profile by fitBio() in main.ts, which is the only place
+     that can know them: the wrap depends on the rendered text metrics, and the
+     line budget on what the facts block leaves of the body row. The values here
+     are the design's intent and the pre-fit fallback -- a bio short enough to
+     need no fitting renders at exactly these. */
+  font-size: var(--bio-size, clamp(9px, 2.55cqw, 13px));
   font-weight: 520;
   line-height: 1.42;
   text-wrap: pretty;
   -webkit-box-orient: vertical;
-  /* Two lines, not three: the facts block grew to a 2x2 grid, and the body
-     row has a fixed height -- three lines plus four facts overflowed the
-     plate on phones. The third line of a bio is where bios start repeating
-     the name anyway. */
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: var(--bio-lines, 2);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 /* The guilloché band between the bio and the facts. flex-grow makes it absorb
    whatever vertical space is left -- tall when the bio is short, a hairline
-   when the bio takes its two full lines -- so the middle of the column is
+   when the bio takes every line it can get -- so the middle of the column is
    never bare. The rules are the plate's own security-line rhythm, faint
-   enough to read as stock rather than decoration. */
+   enough to read as stock rather than decoration.
+
+   `--band` is how it gets out of the way. Being decoration, it loses to text:
+   its floor and its margins are 21.8px of a 156px row at 520px, and handing
+   those back is what lets a full 160-character bio fit without shrinking into
+   microprint. fitBio() sets `--band: 0` when, and only when, the bio needs it. */
 .card__security {
   flex: 1 1 auto;
-  min-height: 0.8cqw;
-  margin: 1.4cqw 0 2cqw;
+  min-height: calc(var(--band, 1) * 0.8cqw);
+  margin: calc(var(--band, 1) * 1.4cqw) 0 calc(var(--band, 1) * 2cqw);
   background: repeating-linear-gradient(
     96deg,
     transparent 0 7px,

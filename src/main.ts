@@ -54,6 +54,12 @@ const validityEl = $<HTMLElement>("[data-validity]");
 const verifiedEl = $<SVGSVGElement>("[data-verified]");
 const authEl = $<HTMLElement>("[data-auth]");
 const serialEl = $<HTMLElement>("[data-serial]");
+// The three boxes the bio fit reasons about: the row that bounds it, the block
+// it competes with, and the decorative band between them that yields first.
+const cardBody = $<HTMLElement>(".card__body");
+const detailsCol = $<HTMLElement>(".card__details");
+const factsEl = $<HTMLElement>(".card__facts");
+const securityBand = $<HTMLElement>(".card__security");
 const foil = $<HTMLElement>("[data-foil]");
 const foilFace = $<HTMLImageElement>("[data-face]");
 const ghost = $<HTMLElement>("[data-ghost]");
@@ -124,6 +130,118 @@ motionBtn.addEventListener("click", async () => {
 let currentHandle = "";
 let currentName = "";
 let currentProfile: Profile | null = null;
+
+/**
+ * X caps a bio at 160 characters (help.x.com/articles/166743; the longest of the
+ * twenty real accounts sampled was 156). So this is not an open-ended text
+ * problem -- it is a known quantity that either fits the space or does not, and
+ * the space can be measured.
+ *
+ * It did not fit, and the previous attempt made that worse. It held the bio at
+ * two lines and shrank the type to 56% instead, which is the wrong lever: line
+ * height scales with the font, so a smaller face buys characters per line but
+ * never a third line. Measured on @swyx (156 chars) at a 520px card, it landed
+ * on 7.28px type whose content STILL overflowed its two lines -- unreadable and
+ * cut, which is exactly what Doğancan reported.
+ *
+ * What was actually in the way is below the bio. `.card__security` is a
+ * decorative guilloché band that exists to keep the middle of the column from
+ * looking bare; between its minimum height and its margins it holds 21.8px of
+ * the 156px body row hostage on desktop. Handing that back is what makes the
+ * difference: the bio's budget goes 32px -> 53.9px, and a full 160-character bio
+ * then fits in three lines at 10.5px with nothing cut off.
+ *
+ * So the band yields before the type does, the line count is whatever the
+ * remaining height allows, and the size steps down only as far as it must.
+ */
+
+/**
+ * The smallest the bio may be set, as a fraction of the design size.
+ *
+ * A guard, not the real limit -- the absolute 8px below is what protects
+ * readability, and on this card (which caps at 520px, so a 13px bio) it is the
+ * one that binds. 0.78 was tried first and turned out to truncate for nothing at
+ * the in-between widths: at a 452px card @swyx's 156 characters need 8.53px and
+ * the relative floor stopped the search at 8.99px, so the card cut a bio that
+ * had 1.5px of room to spare. Measured across 360/390/440/480/640/1280, 0.70
+ * completes every bio the 8px floor allows and changes nothing where 0.78
+ * already worked.
+ *
+ * Shared with the PNG export so a long bio is stepped the same amount in both.
+ */
+const BIO_MIN_SCALE = 0.7;
+
+/**
+ * Fit the bio to the space the column actually has.
+ *
+ * The wrap has to be measured rather than estimated: only the browser knows what
+ * `text-wrap: pretty` and the -apple-system metrics do to a given string at a
+ * given width, and the answer is not linear in the font size -- 11px needs four
+ * lines on the sample bio where 10.5px needs three.
+ *
+ * Two budgets, tried in order, so the band is only sacrificed when it buys
+ * something: the largest size whose whole text fits WITH the band keeps the card
+ * looking as designed; failing that, the largest size that fits once the band
+ * collapses. Only if neither works does the floor apply, and then the line clamp
+ * puts an honest ellipsis on the end rather than shrinking into microprint.
+ */
+function fitBio() {
+  bioEl.style.removeProperty("--bio-size");
+  bioEl.style.removeProperty("--bio-lines");
+  detailsCol.style.removeProperty("--band");
+
+  const base = Number.parseFloat(getComputedStyle(bioEl).fontSize);
+  const leading = Number.parseFloat(getComputedStyle(bioEl).lineHeight) / base;
+  if (!base || !leading) return;
+
+  // The ROW, not the column. `.card__body` is the grid item the plate sizes; its
+  // children are already free to overflow it (the portrait tile does, by 5px at
+  // 520px), so measuring the column would hand that overflow back as free space.
+  const room = cardBody.clientHeight - factsEl.getBoundingClientRect().height;
+  const bandStyle = getComputedStyle(securityBand);
+  const band =
+    Number.parseFloat(bandStyle.minHeight) +
+    Number.parseFloat(bandStyle.marginTop) +
+    Number.parseFloat(bandStyle.marginBottom);
+
+  // Unclamped while measuring: the clamp pins the element's height, which is the
+  // one thing the measurement needs to be free.
+  bioEl.style.setProperty("--bio-lines", "999");
+
+  // Largest size first, so type size wins over decoration: the band is only
+  // collapsed when the size that needs it is the size we are keeping.
+  //
+  // The floor is absolute as well as relative, because readability does not
+  // scale with the container. 8px is still larger than the card's own footer
+  // line (clamp(5.5px, 1.45cqw, 7.5px)).
+  //
+  // The walk clamps to the floor instead of stepping past it. A plain
+  // `candidate -= 0.5` from an arbitrary base overshoots and never tries the
+  // floor itself: at a 452px card it stopped at 9.03px and fell back to a floor
+  // of 8.99px it had never measured, truncating a bio that fitted at 8.53px.
+  const floor = Math.max(8, base * BIO_MIN_SCALE);
+  let size = floor;
+  let tight = true;
+  for (let candidate = base; ; candidate = Math.max(floor, candidate - 0.5)) {
+    bioEl.style.setProperty("--bio-size", `${candidate}px`);
+    const needed = bioEl.scrollHeight;
+    if (needed <= room) {
+      size = candidate;
+      tight = needed > room - band;
+      break;
+    }
+    if (candidate <= floor) break;
+  }
+
+  // A half-pixel of tolerance: scrollHeight rounds, and a line lost to rounding
+  // is a visible ellipsis on a bio that actually fitted.
+  const available = tight ? room : room - band;
+  const lines = Math.max(1, Math.floor((available + 0.5) / (size * leading)));
+
+  bioEl.style.setProperty("--bio-size", `${size}px`);
+  bioEl.style.setProperty("--bio-lines", String(lines));
+  if (tight) detailsCol.style.setProperty("--band", "0");
+}
 
 /**
  * How long a source may stay silent before another is put in the air BESIDE it
@@ -244,6 +362,12 @@ function render(profile: Profile) {
   // the strip -- fine enough to read as texture. overflow hidden clips the
   // repeat at the strip's edge, so the count only has to be long enough.
   microEl.textContent = (profileSerial(profile.handle).replace(/\s+/g, "") + " ").repeat(48);
+
+  // After the facts, never before them. The fit's whole input is how much of the
+  // body row the facts block leaves, and until their values are written that
+  // block is a grid of empty <dd>s -- measurably shorter, so an early fit reads a
+  // budget the finished card does not have and lets the bio overrun the row.
+  fitBio();
 
   card.setAttribute(
     "aria-label",
@@ -376,6 +500,16 @@ function render(profile: Profile) {
   history.replaceState(null, "", url);
   document.title = `${profile.name} — X ID`;
 }
+
+// The card is sized in cqw, so its width -- and with it the bio's base size --
+// changes on resize. Re-fit rather than leave a stale inline size behind.
+let bioFitFrame = 0;
+window.addEventListener("resize", () => {
+  cancelAnimationFrame(bioFitFrame);
+  bioFitFrame = requestAnimationFrame(() => {
+    if (currentProfile) fitBio();
+  });
+});
 
 function say(message: string, tone: "error" | "info" = "error") {
   notice.textContent = message;
@@ -834,16 +968,29 @@ function engrave(
   return canvas;
 }
 
-function wrapCanvasText(
+/**
+ * Wrap `text` to `maxWidth` at the context's current font, ellipsising whatever
+ * does not survive `maxLines`.
+ *
+ * Separate from the drawing below because the bio has to be measured before it
+ * can be placed: how many lines it takes decides whether the guilloché band
+ * still has room, exactly as it does on screen.
+ */
+function wrapCanvasLines(
   ctx: CanvasRenderingContext2D,
   text: string,
-  x: number,
-  y: number,
   maxWidth: number,
-  lineHeight: number,
   maxLines: number,
 ) {
-  const words = text.split(/\s+/);
+  // Wrap the whole string first, then clip. The previous version tried to stop
+  // early -- it broke out of the word loop the moment it had `maxLines - 1`
+  // complete lines -- which threw away every remaining word and left the last
+  // line holding the single word that happened to trigger the break. Text that
+  // needed EXACTLY its line budget came out truncated with an ellipsis it had
+  // not earned: @swyx's 156-character bio wraps to three lines at 31px over
+  // 790px and still exported as "...@cognition…". Wrapping 160 characters twice
+  // costs nothing; getting it wrong cost the end of every full-length bio.
+  const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let line = "";
   for (const word of words) {
@@ -853,19 +1000,30 @@ function wrapCanvasText(
     } else {
       lines.push(line);
       line = word;
-      if (lines.length === maxLines - 1) break;
     }
   }
-  if (line && lines.length < maxLines) lines.push(line);
-  if (lines.length === maxLines && words.join(" ").length > lines.join(" ").length) {
-    const lastIndex = maxLines - 1;
-    let lastLine = lines[lastIndex] ?? "";
-    while (lastLine && ctx.measureText(lastLine + "…").width > maxWidth) {
-      lastLine = lastLine.slice(0, -1);
-    }
-    lines[lastIndex] = lastLine + "…";
-  }
-  lines.forEach((value, index) => ctx.fillText(value, x, y + index * lineHeight));
+  if (line) lines.push(line);
+  if (lines.length <= maxLines) return lines;
+
+  const kept = lines.slice(0, maxLines);
+  let last = kept[maxLines - 1] ?? "";
+  while (last && ctx.measureText(last + "…").width > maxWidth) last = last.slice(0, -1);
+  kept[maxLines - 1] = last + "…";
+  return kept;
+}
+
+function wrapCanvasText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines: number,
+) {
+  wrapCanvasLines(ctx, text, maxWidth, maxLines).forEach((value, index) =>
+    ctx.fillText(value, x, y + index * lineHeight),
+  );
 }
 
 function canvasBlob(canvas: HTMLCanvasElement) {
@@ -1059,33 +1217,75 @@ async function createCardImage() {
 
   const detailsX = 520;
   const detailsWidth = width - detailsX - 90;
+
+  /**
+   * The bio, fitted the way the screen fits it: the guilloché band below is
+   * decoration and yields its space before the type gets any smaller.
+   *
+   * The export runs its OWN fit rather than reusing the screen's numbers. It is
+   * always this 1400px card, while the screen's may be a 362px one on a phone --
+   * borrowing a scale fitted to that would shrink the PNG for no reason. Same
+   * policy, measured against this geometry.
+   *
+   * Baselines: the first sits at 266 and the facts rule at 420. With the band
+   * (drawn across 352-394) the bio has two lines; with the band dropped it has
+   * four, which at 31px over 790px is more than the 160 characters X allows.
+   */
+  const BIO_SIZE = 31;
+  const BIO_LEADING = 43 / BIO_SIZE;
+  const BIO_TOP = 266;
+  const bioText = currentProfile.bio?.trim() || "A public identity, minted from X.";
+
+  const bioMin = BIO_SIZE * BIO_MIN_SCALE;
+  let bioSize = bioMin;
+  let bioLines = 1;
+  let bandRoom = false;
+  // Clamped to the floor rather than stepping past it, for the same reason the
+  // screen fit is: an overshooting walk falls back to a size it never measured.
+  for (let size = BIO_SIZE; ; size = Math.max(bioMin, size - 1)) {
+    ctx.font = `600 ${size}px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif`;
+    const leading = size * BIO_LEADING;
+    // Room for a line is room for its baseline: 340 clears the band's top edge,
+    // 394 is the band's own bottom, which the bio may occupy once it is gone.
+    const withBand = 1 + Math.floor((340 - BIO_TOP) / leading);
+    const withoutBand = 1 + Math.floor((394 - BIO_TOP) / leading);
+    const needed = wrapCanvasLines(ctx, bioText, detailsWidth, 999).length;
+    if (needed <= withoutBand) {
+      bioSize = size;
+      bioLines = needed;
+      bandRoom = needed <= withBand;
+      break;
+    }
+    if (size <= bioMin) {
+      // Even the floor cannot hold it: take the floor's full line budget so the
+      // ellipsis lands at the end of the block, not at the end of line one.
+      bioLines = withoutBand;
+      break;
+    }
+  }
+
   ctx.fillStyle = palette.text;
-  ctx.font = "600 31px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
-  wrapCanvasText(
-    ctx,
-    currentProfile.bio?.trim() || "A public identity, minted from X.",
-    detailsX,
-    266,
-    detailsWidth,
-    43,
-    2,
-  );
+  ctx.font = `600 ${bioSize}px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif`;
+  wrapCanvasText(ctx, bioText, detailsX, BIO_TOP, detailsWidth, bioSize * BIO_LEADING, bioLines);
 
   // The guilloché band between the bio and the facts (screen: .card__security):
   // fine diagonal rules, faint enough to read as stock, fading at both ends.
-  const gx = ctx.createLinearGradient(detailsX, 0, width - 88, 0);
-  const gInk = theme === "chrome" ? "rgba(17,18,24," : "rgba(245,245,247,";
-  gx.addColorStop(0, gInk + "0)");
-  gx.addColorStop(0.15, gInk + "0.08)");
-  gx.addColorStop(0.85, gInk + "0.08)");
-  gx.addColorStop(1, gInk + "0)");
-  ctx.strokeStyle = gx;
-  ctx.lineWidth = 1;
-  for (let x = detailsX - 60; x < width - 28; x += 16) {
-    ctx.beginPath();
-    ctx.moveTo(x, 394);
-    ctx.lineTo(x + 12, 352);
-    ctx.stroke();
+  // Skipped entirely when the bio took its space, mirroring `--band: 0`.
+  if (bandRoom) {
+    const gx = ctx.createLinearGradient(detailsX, 0, width - 88, 0);
+    const gInk = theme === "chrome" ? "rgba(17,18,24," : "rgba(245,245,247,";
+    gx.addColorStop(0, gInk + "0)");
+    gx.addColorStop(0.15, gInk + "0.08)");
+    gx.addColorStop(0.85, gInk + "0.08)");
+    gx.addColorStop(1, gInk + "0)");
+    ctx.strokeStyle = gx;
+    ctx.lineWidth = 1;
+    for (let x = detailsX - 60; x < width - 28; x += 16) {
+      ctx.beginPath();
+      ctx.moveTo(x, 394);
+      ctx.lineTo(x + 12, 352);
+      ctx.stroke();
+    }
   }
 
   const divider = theme === "chrome" ? "rgba(18,20,28,.24)" : "rgba(255,255,255,.24)";
