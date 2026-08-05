@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>X ID — holographic identity cards</title>
+    <meta
+      name="description"
+      content="Mint a holographic X identity card from any public handle."
+    />
+    <meta property="og:title" content="X ID — Mint your holographic identity" />
+    <meta property="og:description" content="Turn your X profile into a tilt-reactive holographic ID card." />
+    <meta property="og:type" content="website" />
+    <!-- No og:url on purpose: it was fixed to the bare site root, which told an
+         unfurl bot that every `?u=<handle>` share actually points at the root --
+         the preview card would bind to the wrong address. Without it the card
+         binds to the URL that was actually shared, which is the whole point of
+         per-handle links. -->
+    <!-- summary_large_image with an actual image, because `summary` with no image at
+         all is what a shared link used to unfurl into: a bare text box that never
+         showed the card. The image cannot be per-handle -- GitHub Pages serves one
+         static document for every `?u=` and an unfurl bot does not run the JS that
+         would personalise it -- so this is one generic card rendered from the @x
+         profile. The recipient's own card still travels as a pasted or attached
+         image; this only has to say what the link IS.
+
+         Sized 1200x600 with the card at 78% height, leaving 66px above and below.
+         Platforms that expect 1.91:1 (1200x628) crop a 2:1 image, and at full bleed
+         that sheared the card's border off -- measured 0px of vertical margin
+         before this. -->
+    <meta property="og:image" content="https://dcgancan.github.io/xid/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="600" />
+    <meta property="og:image:alt" content="A holographic X identity card with an engraved portrait." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="X ID — Mint your holographic identity" />
+    <meta name="twitter:description" content="Turn your X profile into a tilt-reactive holographic ID card." />
+    <meta name="twitter:image" content="https://dcgancan.github.io/xid/og.png" />
+    <meta name="theme-color" content="#07070a" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='19' font-size='20'>🪪</text></svg>" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="masthead">
+        <h1 class="masthead__title" aria-label="X ID">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+          <span>ID</span>
+        </h1>
+        <p class="masthead__sub">
+          Your public profile, pressed into light.
+          <span class="masthead__hint" data-hint>Press and drag the card.</span>
+        </p>
+      </header>
+
+      <form class="lookup" data-form autocomplete="off">
+        <label class="lookup__field">
+          <span class="lookup__at" aria-hidden="true">@</span>
+          <input
+            class="lookup__input"
+            data-input
+            name="handle"
+            type="text"
+            inputmode="text"
+            spellcheck="false"
+            autocapitalize="none"
+            maxlength="15"
+            placeholder="dcgancan"
+            aria-label="X handle"
+          />
+        </label>
+        <button class="lookup__go" type="submit" data-submit>Mint</button>
+      </form>
+
+      <p class="notice" data-notice hidden></p>
+
+      <div class="stage" data-stage>
+        <article
+          class="card"
+          data-card
+          tabindex="0"
+          role="img"
+          aria-label="Holographic X identity card"
+        >
+          <svg class="filter-defs" aria-hidden="true">
+            <defs>
+              <!-- The portrait is a GREY LASER ENGRAVING, not a coloured duotone.
+                   Early revisions fitted it to a reference video which measurement
+                   showed is not an identity card at all: it is a phone screen filmed
+                   off-axis showing an Airbnb identity-verification card. Its card body
+                   measures saturation 0.88 and chroma 173, where a real Turkish ID
+                   portrait measures 0.09 / 12.5 and a printed specimen 0.011 / 1.7 --
+                   an 8-80x gap. The violet/crimson polarity, the "0% yellow" rule and
+                   the luma-125 target were all derived from that pink-magenta gradient,
+                   which is why the portrait never looked like a document. The video
+                   informed the laminate behaviour only; the print follows the cards.
+
+                   Measured on real cards (see reference/PORTRAIT-SPEC.md):
+                     specimen c000  saturation 0.011, grey share 0.995
+                     real card c095 saturation 0.090, grey share 0.814 (ambient light)
+                     specimen c031  saturation 0.019, grey share 0.874
+                   So: achromatic. No palette, and no hue rotation with tilt -- which
+                   also matches what the card physically does when you turn it.
+
+                   The distinguishing property of polycarbonate laser engraving is that
+                   it burns grey INTO the substrate and therefore cannot reach pure black
+                   or pure white: the real card's portrait sits at p5 60.6 / p95 205.7,
+                   a compressed mid band, where a raw photograph reaches p5 0.0. That
+                   compression is the engraved read and it is avatar-independent.
+
+                   Deliberately NOT fitted: the real card's luma mean of 168. That number
+                   is a face on a light grey biometric backdrop; X avatars measure mean
+                   43.9 (@avstorm) and 36.3 (@dcgancan), so chasing 168 would mean
+                   lifting an avatar by 125 luma and washing the face out -- the same
+                   single-source overfit that broke the earlier revisions. The curve is
+                   fitted to the band constraint instead (p5 >= 52, p95 <= 212) while
+                   maximising retained detail, and it is ONE curve for every avatar.
+
+                   Result on the two avatars with the most different histograms:
+                     @avstorm   mean 102.2  p5 56.1  p95 209.1  std 55.2  (86% of raw)
+                     @dcgancan  mean 100.6  p5 56.3  p95 209.1  std 53.1  (116% of raw)
+                   1.6 luma apart, where the per-avatar fits used to diverge by 40+. -->
+              <filter id="portrait-engrave" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+                <feColorMatrix type="saturate" values="0" />
+                <!-- Per-image levels and midtone lock. These two stages are the only
+                     ones written from JS (see exposure() and applyExposure()), because a
+                     stylesheet cannot measure a bitmap and a fixed gain cannot serve
+                     both a dark and a bright photograph. The identity values here are
+                     what renders if the measurement is unavailable. -->
+                <feComponentTransfer data-exp-levels>
+                  <feFuncR type="linear" slope="1" intercept="0" />
+                  <feFuncG type="linear" slope="1" intercept="0" />
+                  <feFuncB type="linear" slope="1" intercept="0" />
+                </feComponentTransfer>
+                <feComponentTransfer data-exp-gamma>
+                  <feFuncR type="gamma" amplitude="1" exponent="1" offset="0" />
+                  <feFuncG type="gamma" amplitude="1" exponent="1" offset="0" />
+                  <feFuncB type="gamma" amplitude="1" exponent="1" offset="0" />
+                </feComponentTransfer>
+                <!-- Contrast and the engraving band as one table, because folding them
+                     into a single linear stage is WRONG. contrast(1.3) clamps at 1.0
+                     before the band is applied, so the composite is only linear below
+                     x = (1+0.15)/1.3 = 0.885; above that it is flat at the ceiling.
+                     A folded `slope 0.780 intercept 0.130` misses that knee and runs to
+                     0.910, overshooting the band's 0.820 ceiling -- measured, that is
+                     what pushed 45.3% of a bright face against the top instead of 22.8%.
+                     These 9 stops are the clamped chain sampled exactly. -->
+                <feComponentTransfer>
+                  <feFuncR type="table" tableValues="0.2200 0.2275 0.3250 0.4225 0.5200 0.6175 0.7150 0.8125 0.8200" />
+                  <feFuncG type="table" tableValues="0.2200 0.2275 0.3250 0.4225 0.5200 0.6175 0.7150 0.8125 0.8200" />
+                  <feFuncB type="table" tableValues="0.2200 0.2275 0.3250 0.4225 0.5200 0.6175 0.7150 0.8125 0.8200" />
+                </feComponentTransfer>
+              </filter>
+              <!-- The ghost portrait's engraving, which differs from the main one in a
+                   single respect: it carries no photographic background.
+
+                   On a real card the ghost is laser-engraved straight into the
+                   polycarbonate, so there is no photo backing plate behind it -- the
+                   card's own surface shows through around the head. Ours was showing
+                   the avatar's backdrop as a visible tile instead: measured, the
+                   corners of the ghost sat at luma 47 against the card's 38, a 9-luma
+                   rectangle exactly where a real card has nothing at all.
+
+                   The fix is to drive alpha from luminance, so the print's dark field
+                   drops out and only the lit face survives. Chain: desaturate, map
+                   into the engraving band as before, copy luminance into alpha, then
+                   shape alpha so the backdrop clears completely while the face stays
+                   solid. Because the RGB stops are unchanged, whatever remains opaque
+                   is still in the same tonal band as the main portrait. -->
+              <filter id="ghost-engrave" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+                <feColorMatrix type="saturate" values="0" />
+                <!-- Same per-image exposure as the main portrait, written from JS. -->
+                <feComponentTransfer data-exp-levels>
+                  <feFuncR type="linear" slope="1" intercept="0" />
+                  <feFuncG type="linear" slope="1" intercept="0" />
+                  <feFuncB type="linear" slope="1" intercept="0" />
+                </feComponentTransfer>
+                <feComponentTransfer data-exp-gamma>
+                  <feFuncR type="gamma" amplitude="1" exponent="1" offset="0" />
+                  <feFuncG type="gamma" amplitude="1" exponent="1" offset="0" />
+                  <feFuncB type="gamma" amplitude="1" exponent="1" offset="0" />
+                </feComponentTransfer>
+                <!-- Contrast folded with the engraving band as a table, for the same
+                     reason as #portrait-engrave: the clamp between them puts a knee at
+                     x = 0.885 that a single linear stage cannot express. -->
+                <feComponentTransfer>
+                  <feFuncR type="table" tableValues="0.2200 0.2275 0.3250 0.4225 0.5200 0.6175 0.7150 0.8125 0.8200" />
+                  <feFuncG type="table" tableValues="0.2200 0.2275 0.3250 0.4225 0.5200 0.6175 0.7150 0.8125 0.8200" />
+                  <feFuncB type="table" tableValues="0.2200 0.2275 0.3250 0.4225 0.5200 0.6175 0.7150 0.8125 0.8200" />
+                </feComponentTransfer>
+                <!-- alpha := luminance of the engraved print -->
+                <feColorMatrix type="matrix" values="1 0 0 0 0
+                                                     0 1 0 0 0
+                                                     0 0 1 0 0
+                                                     0.2126 0.7152 0.0722 0 0" />
+                <!-- The engraving band runs 0.22..0.82, so the backdrop arrives at
+                     alpha 0.22-0.30 and the face at 0.50-0.82. The curve has to be
+                     near zero by 0.30 and near one by 0.55, and it has to get there
+                     CONTINUOUSLY: a first attempt at amplitude 2.2 cleared the
+                     backdrop but drove the face's histogram bipolar (2796 pixels in
+                     the top bucket against 117 in the one below it), which reads as
+                     threshold/glitch rather than as an engraving.
+
+                     Swept both parameters against both avatars under the constraints
+                     "backdrop alpha < 0.05" and "face alpha > 0.85", maximising the
+                     tonal spread that stays at least half visible. Amplitude 4.5 with
+                     exponent 4 wins: backdrop 0.025 (invisible), face 0.946, and the
+                     surviving tonal std rises from 0.022 to 0.056 -- 2.5x the midtone
+                     variety, with three previously empty histogram buckets filled. -->
+                <feComponentTransfer>
+                  <feFuncA type="gamma" amplitude="4.5" exponent="4" offset="0" />
+                </feComponentTransfer>
+              </filter>
+              <!-- Foil diffusion. Replacing the ruled zebra with a soft period fixed the
+                   gradient statistics but flattened tonal variety to 16 distinct tones
+                   against the reference's 33: a ruled pattern was the only thing adding
+                   any. The reference's variety is photographic scatter, not stripes, so
+                   it is reproduced as fine turbulence. Applied as its own layer so it
+                   perturbs both palette plates equally. -->
+              <filter id="foil-diffusion" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.14" numOctaves="2" seed="7" result="n" />
+                <feColorMatrix in="n" type="saturate" values="0.18" />
+              </filter>
+            </defs>
+          </svg>
+
+          <div class="card__plate">
+            <div class="layer layer--base"></div>
+            <div class="layer layer--watermark"></div>
+            <div class="layer layer--security"></div>
+            <div class="layer layer--gloss"></div>
+
+            <div class="card__content">
+              <!-- Left empty on purpose: boot immediately resolves a handle and
+                   fills these in. Baking a sample name here means a card can be
+                   screenshotted showing an identity that was never looked up. -->
+              <div class="card__head">
+                <div class="card__identity">
+                  <div class="card__name-row">
+                    <p class="card__name" data-name></p>
+                    <svg class="card__verified" data-verified viewBox="0 0 22 22" aria-label="Verified account" hidden>
+                      <path d="M20.4 11c0 1.17-1.46 2.05-1.88 3.07-.44 1.06-.05 2.72-.85 3.52-.8.8-2.46.41-3.52.85C13.13 18.86 12.25 20.32 11 20.32s-2.13-1.46-3.15-1.88c-1.06-.44-2.72-.05-3.52-.85-.8-.8-.41-2.46-.85-3.52C3.06 13.05 1.6 12.17 1.6 11s1.46-2.05 1.88-3.07c.44-1.06.05-2.72.85-3.52.8-.8 2.46-.41 3.52-.85C8.87 3.14 9.75 1.68 11 1.68s2.13 1.46 3.15 1.88c1.06.44 2.72.05 3.52.85.8.8.41 2.46.85 3.52.42 1.02 1.88 1.9 1.88 3.07Z" />
+                      <path class="card__verified-check" d="m7.15 11.1 2.38 2.38 5.32-5.34" />
+                    </svg>
+                  </div>
+                  <p class="card__handle" data-handle></p>
+                </div>
+
+                <div class="card__brand" aria-label="X ID">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+                  <span>ID</span>
+                </div>
+              </div>
+
+              <div class="card__body">
+                <div class="foil" data-foil>
+                  <img class="foil__face" data-face alt="" draggable="false" crossorigin="anonymous" referrerpolicy="no-referrer" />
+                  <div class="foil__veil"></div>
+                  <div class="foil__bloom"></div>
+                  <div class="foil__grain"></div>
+                  <div class="foil__diffusion"></div>
+                  <div class="foil__flare"></div>
+                </div>
+
+                <!-- The corner stamp: the X, oversized and translucent, centered on
+                     the portrait's bottom-right corner so it hangs across the frame
+                     like a pressed mark on the card face. Lives OUTSIDE .foil --
+                     the foil clips its laminates with overflow: hidden, and a
+                     stamp has to cross the frame. It sits between the foil and the
+                     details so the portrait carries it but no text is buried under
+                     it. -->
+                <span class="foil__seal" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+                </span>
+
+                <div class="card__details">
+                  <p class="card__bio" data-bio></p>
+
+                  <!-- The guilloché band: fine rules that absorb the space
+                       between the bio and the facts (flex-grow), so the middle
+                       of the column is never bare however short the bio is. -->
+                  <div class="card__security" aria-hidden="true"></div>
+
+                  <dl class="card__facts">
+                    <div class="card__fact">
+                      <dt>Member since</dt>
+                      <dd data-since></dd>
+                    </div>
+                    <!-- Followers only. "Following" was dropped at Doğancan's request:
+                         a real card states what the holder IS, not who they follow, and
+                         the count nobody reads was competing with the ghost portrait for
+                         the same corner. Followers now occupies the row on its own. -->
+                    <div class="card__fact">
+                      <dt>Followers</dt>
+                      <dd data-followers></dd>
+                    </div>
+                    <!-- Location and Posts joined the grid so the data block fills
+                         the column: a real card states residence and standing, not
+                         just age and following. The grid is 2x2 (see .card__facts),
+                         so the block stays the same height it had with two rows. -->
+                    <div class="card__fact">
+                      <dt>Location</dt>
+                      <dd data-location></dd>
+                    </div>
+                    <div class="card__fact">
+                      <dt>Posts</dt>
+                      <dd data-posts></dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+
+              <!-- The secondary (ghost) portrait. Real Turkish ID cards carry two
+                   portraits, and the second one is the anti-substitution feature: it
+                   is the same head, engraved smaller, in the lower right, with the
+                   document number running across it so neither can be replaced
+                   without wrecking the other.
+
+                   Measured position on real cards, as a share of the card face:
+                     main portrait  x 7.5-20%   y 40-86%
+                     ghost portrait x 82-93%    y 52-78%
+                   It sits here, as a child of the card content rather than inside
+                   the details column, because that position is defined against the
+                   card face. Placing it in the column's flow made the column
+                   overflow its grid row and the plate clipped the chin off.
+
+                   The most-corrected misconception: it is NOT faded. Measured,
+                     specimen c000 main luma 172.4 std 78.7 | ghost 167.9 std 82.0
+                     real c095     main luma 168.5 std 45.7 | ghost 176.7 std 43.0
+                   The ghost is as bright as the main photo -- brighter on the real
+                   card -- and higher contrast on the specimen, while the bare card
+                   next to it sits at 226. So it is not a watermark at low opacity;
+                   it is a second engraving. What actually distinguishes it is edge
+                   energy: grad_x 13.76 against the main portrait's 7.14, because it
+                   is physically smaller so its detail is packed tighter. -->
+              <div class="ghost" data-ghost aria-hidden="true">
+                <img class="ghost__face" data-ghost-face alt="" draggable="false" crossorigin="anonymous" referrerpolicy="no-referrer" />
+                <span class="ghost__code" data-ghost-code></span>
+              </div>
+
+              <!-- Microprint band: the document number repeated, fine enough to
+                   read as texture rather than text. Real cards carry a strip of
+                   security text between their data rows and their footer; this
+                   one is deterministic (same holder, same strip), so it binds
+                   to the serial like the ghost's code does. -->
+              <p class="card__micro" data-micro aria-hidden="true"></p>
+
+              <div class="card__foot">
+                <span class="card__auth" data-auth>PUBLIC PROFILE</span>
+                <!-- The validity line, centered: a card states its expiry on
+                     the face, and the footer is the one band wide enough for
+                     it at every viewport. Filled from JS (joined + 10 years);
+                     hidden entirely when no join date was available. -->
+                <span class="card__validity" data-validity></span>
+                <span class="card__serial" data-serial></span>
+              </div>
+            </div>
+
+            <div class="layer layer--edge"></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="controls">
+        <button class="ctl ctl--motion" data-motion type="button" hidden>Enable tilt</button>
+        <div class="ctl-group" role="group" aria-label="Card finish" data-themes>
+          <button class="ctl ctl--swatch" data-theme-btn="onyx" type="button" aria-pressed="true">
+            Onyx
+          </button>
+          <button class="ctl ctl--swatch" data-theme-btn="blaze" type="button" aria-pressed="false">
+            Blaze
+          </button>
+          <button class="ctl ctl--swatch" data-theme-btn="chrome" type="button" aria-pressed="false">
+            Chrome
+          </button>
+        </div>
+        <button class="ctl ctl--share" data-share type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+          <span data-share-label>Share on X</span>
+        </button>
+        <!-- Download is an explicit choice here, unlike an earlier version where
+             sharing downloaded a PNG as a side effect and left it in
+             Downloads for a manual attach step most people abandoned. Pressing a
+             button labelled Download and getting a file is not that. -->
+        <button class="ctl ctl--copy" data-download type="button" aria-label="Download card image">
+          <span data-download-label>Download</span>
+        </button>
+        <button class="ctl ctl--copy" data-copy type="button" aria-label="Copy card link">Copy link</button>
+      </div>
+
+      <footer class="colophon">
+        Public profile data only. Nothing is stored.
+      </footer>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

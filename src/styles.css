@@ -1,0 +1,1215 @@
+/* ============================================================
+   X ID — holographic identity cards
+   Tilt is published by JS as --tx / --ty (-1..1) and --tm (0..1).
+   Every optical layer below is a pure function of those three.
+   ============================================================ */
+
+:root {
+  --ink: #f4f5f7;
+  --ink-dim: #8b8f98;
+  --bg: #07070a;
+  --line: color-mix(in oklab, var(--ink) 12%, transparent);
+  --radius: 26px;
+  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+    "Helvetica Neue", sans-serif;
+
+  /* Neutral tilt so the card is composed before the first input. */
+  --tx: 0;
+  --ty: 0;
+  --tm: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(120% 90% at 50% -10%, #16161f 0%, transparent 55%),
+    radial-gradient(80% 60% at 85% 110%, #12101c 0%, transparent 60%), var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+
+/* Filter definitions only; never painted. `display: none` would disable the
+   filters in some engines, so it is removed from flow the safe way. */
+.filter-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(18px, 3vw, 30px);
+  max-width: 720px;
+  margin-inline: auto;
+  padding: clamp(28px, 7vw, 64px) 20px calc(40px + env(safe-area-inset-bottom));
+}
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  text-align: center;
+}
+
+.masthead__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18em;
+  margin: 0;
+  font-size: clamp(30px, 8vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  color: #fff;
+}
+
+.masthead__title svg {
+  width: 0.78em;
+  height: 0.78em;
+  fill: currentColor;
+  filter: drop-shadow(0 0 14px rgba(157, 163, 255, 0.24));
+}
+
+.masthead__title span {
+  background: linear-gradient(100deg, #fff 10%, #9aa2ff 40%, #ff8fd0 62%, #fff 90%);
+  background-size: 240% 100%;
+  background-position: calc(50% + var(--tx) * 60%) 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.masthead__sub {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+
+.masthead__hint {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- lookup ---------- */
+
+.lookup {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.lookup__field {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 2px;
+  padding-inline: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--ink) 6%, transparent);
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.lookup__field:focus-within {
+  border-color: color-mix(in oklab, var(--ink) 34%, transparent);
+  background: color-mix(in oklab, var(--ink) 10%, transparent);
+}
+
+.lookup__at {
+  color: var(--ink-dim);
+  font-size: 16px;
+}
+
+.lookup__input {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px; /* keeps iOS Safari from zooming on focus */
+  outline: none;
+}
+
+.lookup__input::placeholder {
+  color: color-mix(in oklab, var(--ink-dim) 70%, transparent);
+}
+
+.lookup__go {
+  padding-inline: 20px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ink);
+  color: #0a0a0d;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  transition: opacity 0.18s, transform 0.12s;
+}
+
+.lookup__go:hover:not(:disabled) {
+  opacity: 0.86;
+}
+.lookup__go:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.lookup__go:disabled {
+  opacity: 0.4;
+  cursor: progress;
+}
+
+.notice {
+  margin: -6px 0 0;
+  font-size: 13px;
+  color: #ff9b9b;
+  text-align: center;
+}
+.notice[data-tone="info"] {
+  color: var(--ink-dim);
+}
+
+/* ---------- stage ---------- */
+
+.stage {
+  width: 100%;
+  display: grid;
+  place-items: center;
+  perspective: 1100px;
+  perspective-origin: 50% 50%;
+  padding-block: 10px;
+}
+
+.card {
+  --w: min(100%, 520px);
+  width: var(--w);
+  aspect-ratio: 1.62;
+  container-type: inline-size;
+  transform-style: preserve-3d;
+  border-radius: var(--radius);
+  outline: none;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card.is-grabbed {
+  cursor: grabbing;
+}
+.card.is-motion {
+  cursor: default;
+}
+
+.card:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #7c8cff;
+}
+
+.card__plate {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  isolation: isolate;
+  transform-style: preserve-3d;
+  transform: rotateY(calc(var(--tx) * 17deg)) rotateX(calc(var(--ty) * -17deg))
+    translateZ(0);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.52) inset,
+    calc(var(--tx) * -28px) calc(30px + var(--ty) * -18px) 58px -18px rgba(0, 0, 0, 0.82),
+    0 4px 16px rgba(0, 0, 0, 0.54);
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* base plate ------------------------------------------------ */
+
+.layer--base {
+  background: var(--plate);
+}
+
+.card[data-theme="onyx"] {
+  --plate:
+    radial-gradient(circle at 16% 5%, rgba(141, 135, 196, 0.24), transparent 34%),
+    linear-gradient(145deg, #313144 0%, #111119 35%, #272538 69%, #0d0d14 100%);
+  --mark-ink: rgba(255, 255, 255, 0.9);
+  --check-ink: #161620;
+  /* Debossed side is a shadow, lit side a highlight. */
+  --emboss: rgba(0, 0, 0, 0.62);
+  --emboss-blend: multiply;
+  --emboss-lit: rgba(255, 255, 255, 0.62);
+  --text-dim: rgba(255, 255, 255, 0.68);
+  --scrim: rgba(4, 4, 8, 0.42);
+}
+
+.card[data-theme="blaze"] {
+  --plate:
+    radial-gradient(circle at 8% 5%, rgba(255, 188, 219, 0.32), transparent 32%),
+    linear-gradient(122deg, #98159e 0%, #d31175 37%, #f04442 71%, #ef702d 100%);
+  --mark-ink: rgba(255, 255, 255, 0.95);
+  --check-ink: #8f145d;
+  --emboss: rgba(92, 0, 40, 0.5);
+  --emboss-blend: multiply;
+  --emboss-lit: rgba(255, 220, 235, 0.55);
+  --text-dim: rgba(255, 255, 255, 0.82);
+  --scrim: rgba(60, 4, 30, 0.3);
+}
+
+.card[data-theme="chrome"] {
+  --plate:
+    linear-gradient(108deg, transparent 34%, rgba(255, 255, 255, 0.42) 46%, transparent 58%),
+    linear-gradient(135deg, #e7e9ef 0%, #959cab 27%, #f5f6f8 49%, #747b89 72%, #d8dce4 100%);
+  --mark-ink: rgba(20, 20, 26, 0.86);
+  --check-ink: #f1f2f5;
+  --emboss: rgba(26, 30, 46, 0.4);
+  --emboss-blend: multiply;
+  --emboss-lit: rgba(255, 255, 255, 0.9);
+  --text-dim: rgba(16, 16, 22, 0.72);
+  --scrim: rgba(248, 249, 252, 0.5);
+  color: #101016;
+}
+
+/* watermark: the debossed logo field -------------------------
+
+   The reference card's logo pattern is permanently visible -- large, thin
+   outlines, scattered rather than gridded, covering the half of the plate the
+   text does not use. An earlier build hid it behind a sweeping reveal window,
+   which is a different and much cheaper-looking effect: real security print is
+   always there, and only its *shading* moves with the light. So the pattern
+   holds still (bar a little parallax) and the highlight rides over it. */
+
+.layer--watermark {
+  --tile: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27180%27%20height%3D%27180%27%20viewBox%3D%270%200%20180%20180%27%3E%3Cg%20fill%3D%27none%27%20stroke%3D%27white%27%20stroke-width%3D%271.5%27%20vector-effect%3D%27non-scaling-stroke%27%3E%3Cpath%20transform%3D%27translate%2810%2014%29%20rotate%28-12%29%20scale%282.3%29%27%20d%3D%27M18.244%202.25h3.308l-7.227%208.26%208.502%2011.24H16.17l-5.214-6.817L4.99%2021.75H1.68l7.73-8.835L1.254%202.25H8.08l4.713%206.231zm-1.161%2017.52h1.833L7.084%204.126H5.117z%27%2F%3E%3Cpath%20transform%3D%27translate%28108%2040%29%20rotate%2816%29%20scale%281.45%29%27%20d%3D%27M18.244%202.25h3.308l-7.227%208.26%208.502%2011.24H16.17l-5.214-6.817L4.99%2021.75H1.68l7.73-8.835L1.254%202.25H8.08l4.713%206.231zm-1.161%2017.52h1.833L7.084%204.126H5.117z%27%2F%3E%3Cpath%20transform%3D%27translate%2858%2092%29%20rotate%285%29%20scale%281.75%29%27%20d%3D%27M18.244%202.25h3.308l-7.227%208.26%208.502%2011.24H16.17l-5.214-6.817L4.99%2021.75H1.68l7.73-8.835L1.254%202.25H8.08l4.713%206.231zm-1.161%2017.52h1.833L7.084%204.126H5.117z%27%2F%3E%3Cpath%20transform%3D%27translate%28140%20116%29%20rotate%28-21%29%20scale%281.05%29%27%20d%3D%27M18.244%202.25h3.308l-7.227%208.26%208.502%2011.24H16.17l-5.214-6.817L4.99%2021.75H1.68l7.73-8.835L1.254%202.25H8.08l4.713%206.231zm-1.161%2017.52h1.833L7.084%204.126H5.117z%27%2F%3E%3Cpath%20transform%3D%27translate%2812%20138%29%20rotate%2822%29%20scale%281.2%29%27%20d%3D%27M18.244%202.25h3.308l-7.227%208.26%208.502%2011.24H16.17l-5.214-6.817L4.99%2021.75H1.68l7.73-8.835L1.254%202.25H8.08l4.713%206.231zm-1.161%2017.52h1.833L7.084%204.126H5.117z%27%2F%3E%3Cpath%20transform%3D%27translate%2896%20150%29%20rotate%28-7%29%20scale%281.6%29%27%20d%3D%27M18.244%202.25h3.308l-7.227%208.26%208.502%2011.24H16.17l-5.214-6.817L4.99%2021.75H1.68l7.73-8.835L1.254%202.25H8.08l4.713%206.231zm-1.161%2017.52h1.833L7.084%204.126H5.117z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  -webkit-mask-image: var(--tile);
+  mask-image: var(--tile);
+  -webkit-mask-size: 132px 132px;
+  mask-size: 132px 132px;
+  -webkit-mask-position: calc(var(--tx) * 5px) calc(var(--ty) * 5px);
+  mask-position: calc(var(--tx) * 5px) calc(var(--ty) * 5px);
+
+  /* Debossed, so it darkens rather than glows -- and it fades out over the
+     left third where the name and date sit. */
+  background: linear-gradient(100deg, transparent 4%, var(--emboss) 46%, var(--emboss) 100%);
+  mix-blend-mode: var(--emboss-blend);
+  opacity: calc(0.26 + var(--tm) * 0.3);
+}
+
+/* Its highlight side: the same field, offset a hair, catching light. This pair
+   is what makes the pattern read as pressed into the plate instead of drawn on
+   top of it. */
+.layer--watermark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--emboss-lit);
+  -webkit-mask-image: var(--tile);
+  mask-image: var(--tile);
+  -webkit-mask-size: 132px 132px;
+  mask-size: 132px 132px;
+  -webkit-mask-position: calc(var(--tx) * 5px + 0.6px) calc(var(--ty) * 5px + 0.6px);
+  mask-position: calc(var(--tx) * 5px + 0.6px) calc(var(--ty) * 5px + 0.6px);
+  mix-blend-mode: screen;
+  opacity: calc(0.16 + var(--tm) * 0.34);
+}
+
+/* Fine guilloché lines and a pressed inner frame. These do not move as a
+   texture; only their light response changes, so the plate reads as engraved
+   stock instead of a screen gradient. */
+.layer--security {
+  inset: 9px;
+  border: 1px solid color-mix(in oklab, var(--mark-ink) 20%, transparent);
+  border-radius: calc(var(--radius) - 9px);
+  background:
+    repeating-radial-gradient(
+      ellipse at 8% 120%,
+      transparent 0 8px,
+      color-mix(in oklab, var(--mark-ink) 7%, transparent) 8.5px 9px,
+      transparent 9.5px 15px
+    ),
+    repeating-linear-gradient(
+      102deg,
+      transparent 0 14px,
+      color-mix(in oklab, var(--mark-ink) 4%, transparent) 14px 15px,
+      transparent 15px 29px
+    );
+  box-shadow:
+    0 1px 0 color-mix(in oklab, var(--emboss-lit) 34%, transparent) inset,
+    0 -1px 0 color-mix(in oklab, var(--emboss) 44%, transparent) inset;
+  opacity: calc(0.52 + var(--tm) * 0.18);
+}
+
+/* specular gloss ---------------------------------------------
+   A narrow anisotropic band, not a broad radial bloom. Sheet material catches
+   light in a streak; a soft blob reads as a glow behind the card. */
+
+.layer--gloss {
+  background: linear-gradient(
+    calc(102deg + var(--ty) * 26deg),
+    transparent 30%,
+    rgba(255, 255, 255, 0.1) 41%,
+    rgba(255, 255, 255, 0.42) 48%,
+    rgba(255, 255, 255, 0.1) 55%,
+    transparent 66%
+  );
+  background-size: 240% 240%;
+  background-position: calc(50% - var(--tx) * 105%) calc(50% - var(--ty) * 105%);
+  mix-blend-mode: soft-light;
+  opacity: calc(0.5 + var(--tm) * 0.5);
+}
+
+/* edge / bezel ------------------------------------------------ */
+
+.layer--edge {
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 0 26px rgba(255, 255, 255, 0.05) inset;
+}
+
+/* ---------- card content ---------- */
+
+.card__content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 4.2cqw;
+  padding: 5.1cqw 5.7cqw 4.4cqw;
+  z-index: 2;
+  transform: translateZ(24px);
+}
+
+.card__content::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--scrim) 82%, transparent) 0%,
+    transparent 31%,
+    transparent 70%,
+    color-mix(in oklab, var(--scrim) 55%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+.card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4cqw;
+  min-width: 0;
+}
+
+.card__identity {
+  min-width: 0;
+}
+
+.card__name-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 1.6cqw;
+}
+
+.card__name {
+  margin: 0;
+  min-width: 0;
+  font-size: clamp(18px, 5.3cqw, 28px);
+  font-weight: 760;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__handle {
+  margin: 1.1cqw 0 0;
+  font-size: clamp(10px, 2.8cqw, 14px);
+  font-weight: 560;
+  letter-spacing: 0.025em;
+  color: var(--text-dim);
+}
+
+.card__verified {
+  flex: none;
+  width: clamp(14px, 3.7cqw, 19px);
+  height: clamp(14px, 3.7cqw, 19px);
+  fill: var(--mark-ink);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.32));
+}
+
+.card__verified-check {
+  fill: none;
+  stroke: var(--check-ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card__brand {
+  display: flex;
+  align-items: center;
+  gap: 1.1cqw;
+  color: var(--mark-ink);
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+.card__brand svg {
+  width: clamp(18px, 5.4cqw, 28px);
+  height: clamp(18px, 5.4cqw, 28px);
+  fill: currentColor;
+}
+
+.card__brand span {
+  font-size: clamp(15px, 4.7cqw, 24px);
+  font-weight: 790;
+  letter-spacing: -0.06em;
+}
+
+.card__body {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
+  gap: 5.2cqw;
+  min-height: 0;
+}
+
+.card__details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.card__bio {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: color-mix(in oklab, var(--mark-ink) 88%, transparent);
+  font-size: clamp(9px, 2.55cqw, 13px);
+  font-weight: 520;
+  line-height: 1.42;
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  /* Two lines, not three: the facts block grew to a 2x2 grid, and the body
+     row has a fixed height -- three lines plus four facts overflowed the
+     plate on phones. The third line of a bio is where bios start repeating
+     the name anyway. */
+  -webkit-line-clamp: 2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* The guilloché band between the bio and the facts. flex-grow makes it absorb
+   whatever vertical space is left -- tall when the bio is short, a hairline
+   when the bio takes its two full lines -- so the middle of the column is
+   never bare. The rules are the plate's own security-line rhythm, faint
+   enough to read as stock rather than decoration. */
+.card__security {
+  flex: 1 1 auto;
+  min-height: 0.8cqw;
+  margin: 1.4cqw 0 2cqw;
+  background: repeating-linear-gradient(
+    96deg,
+    transparent 0 7px,
+    color-mix(in oklab, var(--mark-ink) 7%, transparent) 7px 7.4px,
+    transparent 7.4px 14px
+  );
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+
+.card__facts {
+  display: grid;
+  /* Two columns: SINCE / FOLLOWERS over LOCATION / POSTS. A stacked list of
+     four rows would outgrow the fixed-height body row on phones; two rows of
+     two keep the block exactly the height the old two rows had. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* The width is what keeps the ghost clear now: the grid's right edge must
+     stop before the ghost's oval (which begins at 83% of the card). The old
+     reserved track (21cqw) did the same job but left too little room for a
+     second data column. */
+  max-width: 41.5cqw;
+  gap: 2.8cqw 3.4cqw;
+  margin: 0;
+}
+
+.card__fact {
+  min-width: 0;
+  padding-top: 2.1cqw;
+  border-top: 1px solid color-mix(in oklab, var(--mark-ink) 21%, transparent);
+  /* Auto-placement fills the 2x2 grid in reading order. */
+}
+
+.card__fact dt {
+  margin: 0 0 0.75cqw;
+  color: var(--text-dim);
+  font-size: clamp(6px, 1.65cqw, 8.5px);
+  font-weight: 720;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.card__fact dd {
+  margin: 0;
+  overflow: hidden;
+  font-size: clamp(10px, 3.05cqw, 15.5px);
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3cqw;
+  min-width: 0;
+  padding-top: 2.2cqw;
+  border-top: 1px solid color-mix(in oklab, var(--mark-ink) 15%, transparent);
+  color: var(--text-dim);
+  font-size: clamp(5.5px, 1.45cqw, 7.5px);
+  font-weight: 710;
+  letter-spacing: 0.13em;
+}
+
+.card__auth {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The validity line between the auth label and the serial. Centered, and the
+   middle flex item, so it reads as the band's own statement rather than an
+   appendage of either side. On narrow viewports the auth label shrinks first
+   (it is the only one with flex-shrink); the validity line itself ellipsizes
+   only as a last resort. */
+.card__validity {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.card__serial {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- the foil portrait ---------- */
+
+/* The 1px white inset keyline was the largest single source of hard pixel steps:
+   edge analysis put 43-83% of all >12-luma jumps in the outer 6% of the tile,
+   where the reference has literally zero. The reference tile has no drawn stroke
+   at all -- its boundary is a pure tonal step into the card. So the keyline goes
+   and only a soft outer shadow anchors the tile. */
+.foil {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: clamp(9px, 2.8cqw, 15px);
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--ink);
+  /* Transparent to pointers, exactly like .ghost. The card is the drag surface;
+     nothing inside it is a target of its own. It matters here rather than being
+     tidiness: the portrait is an <img>, so while this block was hit-testable a
+     press on the face started a native image drag instead of a tilt and WebKit
+     canceled the pointer under it. See onDragStart / onPointerCancel in tilt.ts. */
+  pointer-events: none;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.1),
+    0 10px 24px -10px rgba(0, 0, 0, 0.7);
+}
+
+/* --swing is no longer used by the portrait -- the engraving does not change with
+   tilt -- but --haze is read by both the foil layers and the ghost, so it is
+   declared on the card root rather than on .foil.
+   It must be monotonic in |tilt|: an earlier version drove some layers from the
+   signed --tx, which made the half-tilt state look duller than head-on, so shown
+   out of order you could not tell which way the card was turning. */
+.card {
+  --haze: clamp(0, calc((var(--tm) - 0.06) * 1.14), 1);
+}
+
+.foil__face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  /* An engraving is part of the card, not a file sitting on it. Without this the
+     browser's default image drag is available on the portrait. */
+  -webkit-user-drag: none;
+}
+
+/* One achromatic plate, and it does not change with tilt. The two tilt-driven
+   duotone plates that used to live here (a cool violet one cross-faded into an
+   inverted terracotta one along a travelling mask) were fitted to a reference
+   video that turned out to be an Airbnb verification card filmed on a phone
+   screen, not an identity document -- 0.88 saturation against a real card's 0.09.
+   A laser engraving has no palette to rotate: what moves when you turn a real card
+   is the laminate above the print, which is what every layer below this one does.
+
+   That video is not in the repo. The measurements taken from it, and from the real
+   cards that replaced it, are in reference/PORTRAIT-SPEC.md.
+
+   The exposure stages inside #portrait-engrave are written per image by
+   exposure() in main.ts: levels plus a midtone lock derived from the photograph's
+   own centre, then the engraving band (p5 >= 52, p95 <= 212). A fixed gain lived
+   here before and clipped 80% of a bright photograph before the curve even ran. */
+.foil__face {
+  transform: scale(1.015);
+  filter: url(#portrait-engrave);
+}
+
+/* ---- the laminate ----
+   This is the one place the reference video still applies. It is not an identity
+   card, but it IS a real sheet of film photographed at changing angles, and its
+   measured behaviour is the right model for a laminate: detail energy falls as
+   the surface tilts away from head-on (r = -0.418 over a 5.6x range) while
+   saturation rises (r = +0.692) -- a film that is nearly invisible face-on and
+   throws a stronger veiling reflection the more you turn it. Doğancan's reading
+   of a real card agrees: the transparent bright layer ripples with angle.
+
+   Every layer below is therefore a function of tilt magnitude, and none of them
+   touch the print's own pixels. --haze is declared on .card (above) so the ghost
+   portrait can read it too. */
+
+/* The diffraction band: a spectral sweep, not a two-colour ramp. Its position is
+   driven by tilt so it travels across the surface, which is what actually sells
+   the tilt -- deriving a highlight from the portrait's own luminance pinned it to
+   the forehead and nose at every angle and was the biggest tell. */
+.foil__veil {
+  position: absolute;
+  inset: -20%;
+  /* The band runs cyan -> pink -> violet with no gold stop. The old centre stop
+     was rgba(255,244,180) -- a yellow -- and between that and a gold warm plate
+     the whole effect read as the photo yellowing when turned. The reference
+     measures 0.0% yellow (hue 40-75) in every frame, so yellow is gone from the
+     palette entirely. */
+  background: linear-gradient(
+    calc(104deg + var(--ty) * 34deg),
+    transparent 26%,
+    rgba(90, 210, 255, 0.34) 38%,
+    rgba(186, 214, 255, 0.4) 44%,
+    rgba(255, 226, 240, 0.56) 50%,
+    rgba(255, 150, 196, 0.44) 56%,
+    rgba(150, 130, 255, 0.34) 62%,
+    transparent 74%
+  );
+  background-size: 230% 230%;
+  background-position: calc(50% - var(--tx) * 96%) calc(50% - var(--ty) * 88%);
+  /* Safari experiment (2026-08-05): blend mode removed -- screen forces
+     per-frame software blending on Safari. Plain alpha over the tile now. */
+  opacity: calc(var(--haze) * 0.5);
+  pointer-events: none;
+}
+
+/* Glare must never blur what is underneath it. An earlier version used
+   backdrop-filter: blur() here, which softened the portrait itself and read as
+   compositing damage rather than a reflection -- at full tilt neither eye was
+   locatable. This is a blurred copy of the BAND, so the reflection glows without
+   disturbing the print. Neutral-to-pink rather than cream, for the same reason
+   the veil dropped its gold stop. */
+.foil__bloom {
+  position: absolute;
+  inset: -24%;
+  background: linear-gradient(
+    calc(104deg + var(--ty) * 34deg),
+    transparent 32%,
+    rgba(255, 226, 238, 0.5) 47%,
+    rgba(255, 242, 248, 0.66) 50%,
+    rgba(255, 226, 238, 0.5) 53%,
+    transparent 68%
+  );
+  background-size: 230% 230%;
+  background-position: calc(50% - var(--tx) * 96%) calc(50% - var(--ty) * 88%);
+  filter: blur(7px);
+  /* Safari experiment: screen removed, plain alpha. */
+  opacity: calc(var(--haze) * 0.44);
+  pointer-events: none;
+}
+
+/* A 1px-period black/white zebra was the single biggest texture error: it pushed
+   gentle-gradient pixel steps to 60% against the reference's 36%, laying a hard
+   ruled pattern over a press that has none. The reference tile carries only a
+   faint diffusion, so the period is widened and the contrast cut to a whisper —
+   and the tonal scatter that the stripes used to supply now comes from the
+   turbulence layer below, which is closer to what the reference actually shows. */
+.foil__grain {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    calc(64deg + var(--tx) * 30deg),
+    rgba(255, 255, 255, 0.035) 0 2px,
+    rgba(0, 0, 0, 0.03) 2px 5px,
+    transparent 5px 9px
+  );
+  /* Safari experiment: overlay removed, plain alpha. */
+  /* Scaled by tilt like everything else optical: a laminate's microstructure only
+     catches the light off-axis, so head-on it should be nearly invisible. */
+  opacity: calc(0.05 + var(--haze) * 0.22);
+}
+
+/* Safari experiment: the turbulence SVG filter below is one of the heaviest
+   per-frame rasterizations on Safari, so it is disabled while the blend-mode
+   experiment runs. The layer keeps its div (re-enable = remove this rule). */
+.foil__diffusion {
+  display: none;
+}
+
+/* The old 2%-wide 78%-white spike read as a hard chrome band. The reference's
+   sweep is a broad, low-amplitude wash, so the stops are spread and softened.
+   Head-on it is gone entirely -- a specular streak is by definition an off-axis
+   reflection, and leaving a permanent one on the photo is what made the portrait
+   look damaged rather than laminated. */
+.foil__flare {
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(
+    calc(74deg + var(--ty) * 36deg),
+    transparent 26%,
+    rgba(255, 255, 255, 0.16) 42%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0.16) 58%,
+    transparent 74%
+  );
+  background-size: 260% 260%;
+  background-position: calc(50% + var(--tx) * 120%) calc(50% + var(--ty) * 120%);
+  /* Safari experiment: soft-light removed, plain alpha. */
+  opacity: calc(var(--haze) * 0.62);
+}
+
+/* The corner stamp: a circular pressed mark at the portrait's bottom-right
+   corner, hanging across the frame. The X is struck at an angle -- a press
+   mark lands at one, so the glyph reads as hit into the card rather than
+   printed upright -- inside a round frame, like the badge it replaced but
+   larger and sitting on the corner.
+
+   Geometry is the portrait's corner, not a fraction of the body: the foil is
+   grid column 1 (34% of the body), so its right edge sits at 66% of the body
+   width -- 58.5cqw from the body's right edge -- and its bottom edge IS the
+   body's bottom. An 18cqw disc centered there means a quarter of it stays on
+   the portrait and the rest spills below and beside it. The right part reaches
+   into the details column's band, but the details text paints after the stamp,
+   so nothing is buried under it.
+
+   Embossed like a coin, not painted like a badge: one light falloff across
+   the face (linear, top-left bright to bottom-right dark), and the relief
+   carried by crisp rim shadows -- bright inside the top-left edge, dark
+   inside the bottom-right -- plus the same light/dark edge pair on the glyph
+   and a soft drop shadow to ground the whole mark. */
+.foil__seal {
+  position: absolute;
+  right: 51cqw;
+  bottom: -7.5cqw;
+  display: grid;
+  width: 15cqw;
+  aspect-ratio: 1;
+  place-items: center;
+  transform: rotate(-14deg);
+  border: 1px solid color-mix(in oklab, var(--mark-ink) 38%, transparent);
+  border-radius: 50%;
+  color: color-mix(in oklab, var(--mark-ink) 42%, transparent);
+  mix-blend-mode: overlay;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.04) 34%,
+    rgba(0, 0, 0, 0.08) 66%,
+    rgba(0, 0, 0, 0.22) 100%
+  );
+  box-shadow:
+    inset 0.16cqw 0.16cqw 0.24cqw var(--emboss-lit),
+    inset -0.18cqw -0.18cqw 0.28cqw var(--emboss),
+    0 0.08cqw 0.16cqw rgba(0, 0, 0, 0.32);
+  pointer-events: none;
+}
+
+.foil__seal svg {
+  width: 50%;
+  height: 50%;
+  fill: currentColor;
+  filter:
+    drop-shadow(0.1cqw 0.1cqw 0 var(--emboss))
+    drop-shadow(-0.08cqw -0.08cqw 0 var(--emboss-lit));
+}
+
+.foil.is-empty .foil__face {
+  display: none;
+}
+
+/* ---------- the ghost portrait ----------
+   The second engraving, lower right.
+
+   It is positioned against the card face rather than placed in the details
+   column's flow. The flow version overshot: .card__details is a flex column whose
+   facts block pushes to the bottom, so appending the ghost made the column 240px
+   tall inside a 156px row, and the plate's `overflow: hidden` sliced 18px off the
+   portrait's chin -- which measured as p5 3.1, i.e. page background inside the
+   tile, not an engraving that had crushed its blacks.
+
+   Absolute placement is also what the measurement asks for. On real cards the
+   ghost occupies x 82-93% / y 52-78% of the card FACE, which is a statement about
+   the card, not about wherever a text column happens to end. */
+.ghost {
+  position: absolute;
+  right: 7%;
+  /* Sits in the corner the facts grid reserves for it (see .card__facts). Aligned
+     to that block's band rather than to the card's bottom edge: pushed below the
+     facts it ran into the serial number instead (168px2 on mobile).
+
+     18.5% rather than 20.6% because at the narrower width the facts grid rewraps and
+     the "Followers" cell reaches into the reserved track, grazing the ghost's top
+     edge by 0.5px. Dropping the ghost 2% clears that without reaching the footer,
+     which starts at 86.2% of the card height. */
+  bottom: 18.5%;
+  /* No min-width. A floor of 34px made the ghost 41.7px wide on a 390px viewport
+     while the grid's reserved track was only 29.9px, so the ghost grew back over
+     the data columns on mobile only. Both are now driven by the same percentage of
+     the card, so the reservation holds at every width. */
+  width: 10%;
+  /* Slightly taller than wide: the oval frame. This deliberately deviates from
+     the main portrait's near-square tile (Doğancan's redesign, 2026-08-05) -- the
+     two portraits now crop different slices of the avatar, which is the point of
+     a second print. Width was dropped 11.5% -> 10% so the vertical footprint of
+     the box is unchanged (10% * 1.15 == 11.5%), keeping the facts grid clear. */
+  aspect-ratio: 1 / 1.15;
+  /* The oval frame, and the clip that goes with it. The old build shipped the
+     head bare with neither -- correct for a keyed engraving, but on avatars with
+     a bright backdrop the alpha key has nothing to remove (luminance ~0.9 keys
+     to full opacity), so the photographic rectangle came straight back. The
+     ellipse cuts that rectangle regardless of backdrop: whatever the head does
+     not fill is card plate, not photo. `overflow: hidden` keeps the serial and
+     the laminate inside the oval. */
+  border-radius: 50%;
+  overflow: hidden;
+  /* Uniform softening over the plate, so the second portrait reads as printed
+     INTO the card rather than stuck on it. The measurements that argued the
+     ghost must not be faded still hold for the old look; this is a deliberate
+     stylistic override (Doğancan, 2026-08-05), not a return to the watermark
+     bug -- the engraving band itself is untouched. */
+  opacity: 0.8;
+  border: 1px solid color-mix(in oklab, var(--mark-ink) 30%, transparent);
+  isolation: isolate;
+  pointer-events: none;
+}
+
+/* Same engraving curve as the main portrait, because the measurement says the
+   ghost sits in the same luma band -- 167.9 against 172.4 on the specimen,
+   176.7 against 168.5 on the real card. It is emphatically not a faded copy;
+   any transparency comes from the container's oval frame, not from a weakened
+   engraving.
+
+   The aspect ratio used to be matched to the main portrait so `object-fit: cover`
+   sampled the same pixels in both tiles -- measured: a 5:6 ghost pulled 331px of
+   a 400px avatar against the main portrait's 265px and landed 10-11 luma darker
+   for purely geometric reasons. Doğancan's redesign (2026-08-05) overrides that:
+   the ghost now crops a deliberately different, slightly narrower slice behind
+   its oval frame, so the two portraits no longer share the same crop.
+
+   What still differs is edge energy: the real ghost measures grad_x 13.76 against
+   the main portrait's 7.14 because it is a smaller engraving with its detail
+   packed tighter. Rendering the same bitmap into a quarter of the area reproduces
+   that on its own -- measured 9.18 against 5.03 -- so contrast stays at 1.3 and
+   matches the main portrait exactly. An earlier 1.42 here cost 2.6 luma of the
+   band for no measurable gain in edge energy.
+
+   The one real difference is #ghost-engrave rather than #portrait-engrave: it adds
+   an alpha stage that keys the photograph's backdrop out, so the head sits on the
+   card with nothing behind it, as an engraving does.
+
+   The screen look now diverges from the measurement's other finding too: the
+   container is an oval at 80% opacity (see .ghost). The engraving itself is
+   untouched -- same band, same contrast -- the difference is purely the frame
+   around it. */
+.ghost__face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  -webkit-user-drag: none;
+  filter: url(#ghost-engrave);
+}
+
+/* The document number crossing the portrait. On both the specimen and the real
+   card a character string runs across the ghost at eye level, disappearing into
+   the dark areas of the hair and reappearing over the light ones -- the two
+   layers are printed into each other so neither can be lifted alone.
+
+   `difference` is what produces that interleaving: over dark hair the light
+   glyphs invert to near-black and vanish, over the bright face they stay
+   legible. Doğancan's reading of the real card was that at an angle you sense
+   another layer inside rather than a clean swap to a number, so the string
+   gains with tilt instead of replacing the portrait -- it is never fully absent
+   and never takes over. */
+.ghost__code {
+  position: absolute;
+  top: 47%;
+  left: -6%;
+  width: 112%;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: clamp(4px, 1.15cqw, 6px);
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  white-space: nowrap;
+  text-align: center;
+  mix-blend-mode: difference;
+  opacity: calc(0.34 + var(--haze) * 0.54);
+  pointer-events: none;
+}
+
+/* The laminate reaches across the ghost too -- it is under the same sheet of
+   polycarbonate as the main portrait, so it cannot stay matte while the other
+   one catches the light. Same spectral band and the same tilt drive, scaled
+   down since the tile is smaller.
+
+   It is masked to the engraving's own silhouette. Previously `overflow: hidden` on
+   .ghost clipped this to the tile; with the clip gone (so the keyed-out backdrop
+   can show the card through) an unmasked sweep would paint a rectangle of light
+   across the card, reinstating the very box the alpha key removes. Masking with
+   the same bitmap confines the sheen to the head. */
+.ghost::after {
+  position: absolute;
+  content: "";
+  inset: 0;
+  background: linear-gradient(
+    calc(104deg + var(--ty) * 34deg),
+    transparent 30%,
+    rgba(90, 210, 255, 0.3) 40%,
+    rgba(255, 226, 240, 0.5) 50%,
+    rgba(150, 130, 255, 0.3) 60%,
+    transparent 70%
+  );
+  background-size: 240% 240%;
+  background-position: calc(50% - var(--tx) * 96%) calc(50% - var(--ty) * 88%);
+  -webkit-mask-image: var(--ghost-src);
+  mask-image: var(--ghost-src);
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  mix-blend-mode: screen;
+  opacity: calc(var(--haze) * 0.46);
+  pointer-events: none;
+}
+
+.ghost.is-empty {
+  display: none;
+}
+
+/* ---------- the microprint band ----------
+
+   The strip of security text between the data rows and the footer rule, like
+   the microtext a real card carries. It is the document number repeated --
+   deterministic per holder, so the strip binds to the serial the way the
+   ghost's code does: replace one and the other gives it away.
+
+   Positioned in the band between the body's bottom edge and the footer rule.
+   The band exists because .card__content is a 3-row grid (head / body / foot):
+   the facts block and the portrait end at the body row's bottom, and only the
+   grid gap plus the foot's own padding separate them from the rule. At a 520px
+   card that band measures ~22px; at 390px ~16px -- both comfortable for a
+   ~4px line of text.
+
+   Ends at 82.5cqw, the ghost's left edge, so the oval corner stays clear. */
+.card__micro {
+  position: absolute;
+  left: 5.7cqw;
+  /* width: 5.7cqw .. 82.5cqw, mirroring the export's x 82..1138 band. */
+  width: 76.8cqw;
+  bottom: 10cqw;
+  margin: 0;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(3px, 0.92cqw, 4.8px);
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: color-mix(in oklab, var(--mark-ink) 24%, transparent);
+  pointer-events: none;
+  user-select: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+/* ---------- controls ---------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ctl-group {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.ctl {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.16s, background 0.16s, border-color 0.16s;
+  /* One height for every control. Share carries an inline SVG, which lifts its line
+     box to 40px, while the text-only buttons sat at 36 -- visible as a stepped row
+     once Download joined them on the wrapped mobile line. Setting the box rather
+     than padding keeps them equal regardless of what is inside. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+
+.ctl:hover {
+  color: var(--ink);
+  border-color: color-mix(in oklab, var(--ink) 28%, transparent);
+}
+
+.ctl:disabled {
+  opacity: 0.58;
+  cursor: progress;
+}
+
+.ctl--swatch {
+  border: 0;
+  padding: 7px 13px;
+  /* Exempt from the 40px floor the other controls take: these sit INSIDE .ctl-group,
+     which adds 4px of padding on each side, so a 40px swatch makes the group 50 and
+     the row steps again -- the very thing the floor is there to prevent. 30px here
+     lands the group back at 40, level with its siblings. */
+  min-height: 30px;
+}
+
+.ctl--swatch[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--ink) 12%, transparent);
+  color: var(--ink);
+}
+
+.ctl--motion {
+  border-color: #7c8cff;
+  color: #b9c1ff;
+}
+
+/* `hidden` must actually hide. .ctl sets display: inline-flex, and any author
+   display rule beats the UA stylesheet's `[hidden] { display: none }` -- so the
+   motion button's hidden attribute was being ignored and "Enable tilt" showed
+   on every device, desktop included. JS toggles the attribute; this is what
+   makes the toggle visible. */
+.ctl[hidden] {
+  display: none;
+}
+
+.ctl--share {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: #f3f4f6;
+  background: #f3f4f6;
+  color: #0a0a0d;
+  font-weight: 680;
+}
+
+.ctl--share:hover {
+  border-color: #fff;
+  background: #fff;
+  color: #0a0a0d;
+}
+
+.ctl--share svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
+.ctl--copy {
+  padding-inline: 11px;
+}
+
+.colophon {
+  max-width: 380px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  text-align: center;
+  color: color-mix(in oklab, var(--ink-dim) 76%, transparent);
+}
+
+.colophon a {
+  color: inherit;
+}
+
+@media (max-width: 520px) {
+  .app {
+    padding-inline: 14px;
+  }
+
+  .stage {
+    padding-block: 4px;
+  }
+
+  .card__content {
+    gap: 3.7cqw;
+  }
+
+  .controls {
+    max-width: 390px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card__plate,
+  .lookup__go,
+  .ctl {
+    transition: none;
+  }
+}
